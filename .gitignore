@@ -12,6 +12,7 @@ build/
 
 # Cache files
 cache/
+.cache/
 *.cache.json
 *.cache
 
