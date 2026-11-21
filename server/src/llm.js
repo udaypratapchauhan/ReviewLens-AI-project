@@ -9,32 +9,47 @@ export async function callGemini(reviews, { fetchImpl = fetch } = {}) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const prompt = buildUserPrompt(reviews);
 
-  const res = await fetchImpl(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey
-    },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: SYSTEM_INSTRUCTION }]
+  let res;
+  try {
+    res = await fetchImpl(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
       },
-      contents: [
-        {
-          parts: [{ text: prompt }]
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: SYSTEM_INSTRUCTION }]
+        },
+        contents: [
+          {
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA
         }
-      ],
-      generationConfig: {
-        temperature: 0,
-        responseMimeType: 'application/json',
-        responseSchema: RESPONSE_SCHEMA
-      }
-    })
-  });
+      })
+    });
+  } catch (err) {
+    err.retryable = true;
+    throw err;
+  }
 
   if (!res.ok) {
     const error = new Error(`Gemini API error: ${res.statusText || res.status}`);
     error.status = res.status;
+    if (res.status === 429) {
+      const retryAfter = res.headers?.get?.('retry-after') ?? res.headers?.['retry-after'];
+      if (retryAfter) {
+        const seconds = parseFloat(retryAfter);
+        if (!isNaN(seconds)) {
+          error.retryAfterMs = seconds * 1000;
+        }
+      }
+    }
     throw error;
   }
 
