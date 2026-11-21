@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateAnalysis, SENTIMENTS, TOPICS } from './schema.js';
+import { validateAnalysis, SENTIMENTS, TOPICS, insightsSchema } from './schema.js';
 
 describe('validateAnalysis', () => {
   const validBase = {
@@ -108,5 +108,52 @@ describe('validateAnalysis', () => {
     expect(res.ok).toBe(true);
     expect(res.error).toBeNull();
     expect(res.data.topics).toEqual(['quality', 'delivery', 'price']);
+  });
+});
+
+describe('insightsSchema validation', () => {
+  const validInsights = {
+    complaints: [
+      { title: 'Broken handle', count: 5 },
+      { title: 'Late delivery', count: 2 }
+    ],
+    praises: [{ title: 'Soft fabric', count: 12 }]
+  };
+
+  it('valid insights object passes', () => {
+    const res = insightsSchema.safeParse(validInsights);
+    expect(res.success).toBe(true);
+  });
+
+  it('rejects string count or negative count', () => {
+    const stringCount = {
+      ...validInsights,
+      complaints: [{ title: 'Broken handle', count: '5' }]
+    };
+    expect(insightsSchema.safeParse(stringCount).success).toBe(false);
+
+    const negativeCount = {
+      ...validInsights,
+      complaints: [{ title: 'Broken handle', count: -1 }]
+    };
+    expect(insightsSchema.safeParse(negativeCount).success).toBe(false);
+  });
+
+  it('rejects more than 3 complaints or praises', () => {
+    const tooManyComplaints = {
+      ...validInsights,
+      complaints: [
+        { title: 'c1', count: 1 },
+        { title: 'c2', count: 2 },
+        { title: 'c3', count: 3 },
+        { title: 'c4', count: 4 }
+      ]
+    };
+    expect(insightsSchema.safeParse(tooManyComplaints).success).toBe(false);
+  });
+
+  it('rejects extra fields', () => {
+    const extraField = { ...validInsights, extra: 'not allowed' };
+    expect(insightsSchema.safeParse(extraField).success).toBe(false);
   });
 });
