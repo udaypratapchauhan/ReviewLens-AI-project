@@ -1,5 +1,15 @@
 import { validateAnalysis } from './schema.js';
-import { SYSTEM_INSTRUCTION, buildUserPrompt, RESPONSE_SCHEMA } from './prompts.js';
+import {
+  SYSTEM_INSTRUCTION,
+  buildUserPrompt,
+  RESPONSE_SCHEMA,
+  REPLY_SYSTEM_INSTRUCTION,
+  buildReplyPrompt,
+  INSIGHTS_SYSTEM_INSTRUCTION,
+  buildInsightsPrompt,
+  INSIGHTS_SCHEMA
+} from './prompts.js';
+import { withBackoff } from './retry.js';
 
 export async function callGemini(reviews, { fetchImpl = fetch } = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -147,4 +157,131 @@ export async function analyzeBatch(reviews, { call = callGemini } = {}) {
   }
 
   return results;
+}
+
+export async function generateReply(review, { fetchImpl = fetch } = {}) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL;
+  if (!apiKey || !model) throw new Error('GEMINI_API_KEY and GEMINI_MODEL must be set in .env');
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const prompt = buildReplyPrompt(review);
+
+  const callFn = async () => {
+    let res;
+    try {
+      res = await fetchImpl(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: REPLY_SYSTEM_INSTRUCTION }]
+          },
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.3
+          }
+        })
+      });
+    } catch (err) {
+      err.retryable = true;
+      throw err;
+    }
+
+    if (!res.ok) {
+      const error = new Error(`Gemini API error: ${res.statusText || res.status}`);
+      error.status = res.status;
+      if (res.status === 429) {
+        const retryAfter = res.headers?.get?.('retry-after') ?? res.headers?.['retry-after'];
+        if (retryAfter) {
+          const seconds = parseFloat(retryAfter);
+          if (!isNaN(seconds)) {
+            error.retryAfterMs = seconds * 1000;
+          }
+        }
+      }
+      throw error;
+    }
+
+    const json = await res.json();
+    const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    return text.trim();
+  };
+
+  return await withBackoff(callFn);
+}
+
+export async function generateInsights(
+  { negativeSummaries = [], positiveSummaries = [] } = {},
+  { fetchImpl = fetch } = {}
+) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL;
+  if (!apiKey || !model) throw new Error('GEMINI_API_KEY and GEMINI_MODEL must be set in .env');
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const prompt = buildInsightsPrompt({ negativeSummaries, positiveSummaries });
+
+  const callFn = async () => {
+    let res;
+    try {
+      res = await fetchImpl(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({
+          systemInstruction: {
+            parts: [{ text: INSIGHTS_SYSTEM_INSTRUCTION }]
+          },
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ],
+          generationConfig: {
+            temperature: 0,
+            responseMimeType: 'application/json',
+            responseSchema: INSIGHTS_SCHEMA
+          }
+        })
+      });
+    } catch (err) {
+      err.retryable = true;
+      throw err;
+    }
+
+    if (!res.ok) {
+      const error = new Error(`Gemini API error: ${res.statusText || res.status}`);
+      error.status = res.status;
+      if (res.status === 429) {
+        const retryAfter = res.headers?.get?.('retry-after') ?? res.headers?.['retry-after'];
+        if (retryAfter) {
+          const seconds = parseFloat(retryAfter);
+          if (!isNaN(seconds)) {
+            error.retryAfterMs = seconds * 1000;
+          }
+        }
+      }
+      throw error;
+    }
+
+    const json = await res.json();
+    const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const parsed = JSON.parse(text);
+    return {
+      complaints: Array.isArray(parsed.complaints) ? parsed.complaints.slice(0, 3) : [],
+      praises: Array.isArray(parsed.praises) ? parsed.praises.slice(0, 3) : []
+    };
+  };
+
+  return await withBackoff(callFn);
 }

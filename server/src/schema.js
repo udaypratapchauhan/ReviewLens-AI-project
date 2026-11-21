@@ -31,3 +31,17 @@ export function validateAnalysis(obj) {
     return { ok: false, data: null, error: err?.message || 'Validation failed' };
   }
 }
+
+const insightItemSchema = z
+  .object({
+    title: z.string().min(1),
+    count: z.number().int().min(0)
+  })
+  .strict();
+
+export const insightsSchema = z
+  .object({
+    complaints: z.array(insightItemSchema).max(3),
+    praises: z.array(insightItemSchema).max(3)
+  })
+  .strict();
