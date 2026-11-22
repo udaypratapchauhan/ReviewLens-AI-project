@@ -1,14 +1,24 @@
+import fs from 'fs';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createApp } from './app.js';
 import { createCache } from './cache.js';
 
-// Load .env from workspace root or server directory
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
-dotenv.config();
+
+// Load .env only if the file exists (on Render variables come from the dashboard)
+const rootEnvPath = path.resolve(__dirname, '../../.env');
+const serverEnvPath = path.resolve(__dirname, '../.env');
+
+if (fs.existsSync(rootEnvPath)) {
+  dotenv.config({ path: rootEnvPath });
+} else if (fs.existsSync(serverEnvPath)) {
+  dotenv.config({ path: serverEnvPath });
+} else if (fs.existsSync('.env')) {
+  dotenv.config();
+}
 
 const port = process.env.PORT || 3001;
 const cache = createCache();

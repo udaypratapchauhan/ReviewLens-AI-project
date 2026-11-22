@@ -1,7 +1,13 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { createRoutes } from './routes.js';
 import { createCache } from './cache.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export function createMemoryStore() {
   let latest = null;
@@ -37,6 +43,26 @@ export function createApp({
   });
 
   app.use('/api', apiRouter);
+
+  // Serve client static build if client/dist exists
+  const clientDistCandidates = [
+    path.resolve(__dirname, '../../client/dist'),
+    path.resolve(__dirname, '../client/dist'),
+    path.resolve(process.cwd(), 'client/dist'),
+    path.resolve(process.cwd(), '../client/dist')
+  ];
+  const clientDistPath = clientDistCandidates.find((p) => fs.existsSync(p));
+
+  if (clientDistPath) {
+    app.use(express.static(clientDistPath));
+
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) {
+        return next();
+      }
+      res.sendFile(path.resolve(clientDistPath, 'index.html'));
+    });
+  }
 
   // 404 handler for unknown routes
   app.use((req, res) => {
