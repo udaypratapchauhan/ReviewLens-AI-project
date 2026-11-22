@@ -5,7 +5,7 @@ export async function runAnalysis(
   reviews,
   {
     batchSize = 5,
-    delayMs = 1000,
+    delayMs = 6000,
     analyze = analyzeBatch,
     call,
     sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
@@ -82,6 +82,7 @@ export async function runAnalysis(
       if (err?.status === 401 || err?.status === 403) {
         throw err;
       }
+      console.error(`batch failed: ${err?.status} ${err?.message}`);
       for (const review of batch) {
         results.set(review.id, {
           status: 'analysis_failed',

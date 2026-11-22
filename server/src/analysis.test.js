@@ -65,7 +65,7 @@ describe('runAnalysis batching, resilience, and caching', () => {
     expect(results.get('R012').status).toBe('ok');
   });
 
-  it('calls sleep between batches only (2 times for 3 batches)', async () => {
+  it('calls sleep between batches only (2 times for 3 batches) with default delayMs 6000', async () => {
     const reviews = createMockReviews(12);
 
     const mockAnalyze = vi.fn().mockImplementation(async (batch) => {
@@ -79,14 +79,13 @@ describe('runAnalysis batching, resilience, and caching', () => {
     const sleep = vi.fn();
     await runAnalysis(reviews, {
       batchSize: 5,
-      delayMs: 1000,
       analyze: mockAnalyze,
       sleep
     });
 
     expect(sleep).toHaveBeenCalledTimes(2);
-    expect(sleep).toHaveBeenNthCalledWith(1, 1000);
-    expect(sleep).toHaveBeenNthCalledWith(2, 1000);
+    expect(sleep).toHaveBeenNthCalledWith(1, 6000);
+    expect(sleep).toHaveBeenNthCalledWith(2, 6000);
   });
 
   it('marks batch reviews as analysis_failed when batch fails with 503 and lets other batches succeed', async () => {

@@ -70,6 +70,45 @@ describe('Express API Endpoints', () => {
     expect(r015.analysis).toEqual(r012.analysis);
   });
 
+  it('a failed review in the upload response has analysis_error set', async () => {
+    const mockRunAnalysis = vi.fn().mockImplementation(async (reviews) => {
+      const results = new Map();
+      for (const r of reviews) {
+        if (r.id === 'R001') {
+          results.set(r.id, {
+            status: 'analysis_failed',
+            error: 'Invalid JSON returned from LLM'
+          });
+        } else {
+          results.set(r.id, {
+            status: 'ok',
+            analysis: {
+              sentiment: 'positive',
+              topics: ['quality'],
+              summary: 'Good',
+              needs_reply: false
+            }
+          });
+        }
+      }
+      return {
+        results,
+        stats: { ai_calls: 1, cache_hits: 0, reviews_analysed: reviews.length - 1, total_ms: 10 }
+      };
+    });
+
+    const app = createApp({ runAnalysisFn: mockRunAnalysis });
+
+    const res = await request(app)
+      .post('/api/upload')
+      .attach('file', realCsvBuffer, 'reviews.csv');
+
+    expect(res.status).toBe(200);
+    const r001 = res.body.reviews.find((r) => r.review_id === 'R001');
+    expect(r001.analysis_status).toBe('analysis_failed');
+    expect(r001.analysis_error).toBe('Invalid JSON returned from LLM');
+  });
+
   it('upload with no file returns 400, a .txt file returns 400', async () => {
     const app = createApp();
 

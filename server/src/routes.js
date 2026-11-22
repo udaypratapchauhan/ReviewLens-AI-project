@@ -81,13 +81,15 @@ export function createRoutes({
           mergedReviews.push({
             ...r,
             analysis: null,
-            analysis_status: 'skipped_empty'
+            analysis_status: 'skipped_empty',
+            analysis_error: null
           });
         } else if (r.status === 'malformed') {
           mergedReviews.push({
             ...r,
             analysis: null,
-            analysis_status: 'malformed'
+            analysis_status: 'malformed',
+            analysis_error: null
           });
         } else if (r.status === 'to_analyse') {
           const ar = analysisResults.get(r.review_id);
@@ -95,20 +97,23 @@ export function createRoutes({
             mergedReviews.push({
               ...r,
               analysis: ar.analysis,
-              analysis_status: 'ok'
+              analysis_status: 'ok',
+              analysis_error: null
             });
           } else {
             mergedReviews.push({
               ...r,
               analysis: null,
-              analysis_status: 'analysis_failed'
+              analysis_status: 'analysis_failed',
+              analysis_error: ar?.error ?? null
             });
           }
         } else if (r.status === 'duplicate') {
           mergedReviews.push({
             ...r,
             analysis: null,
-            analysis_status: 'duplicate'
+            analysis_status: 'duplicate',
+            analysis_error: null
           });
         }
       }
